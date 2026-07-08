@@ -1,98 +1,241 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useState } from "react";
+import {
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { CurrencyPicker } from "@/components/currency-picker";
+import { CURRENCIES, Currency } from "@/constants/currencies";
+import { Colors, Spacing } from "@/constants/theme";
+import { useExchangeRate } from "@/hooks/use-exchange-rate";
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+const FEE = 8.4;
 
 export default function HomeScreen() {
+  const [amount, setAmount] = useState("0");
+  const [from, setFrom] = useState<Currency>(CURRENCIES[0]); // USD
+  const [to, setTo] = useState<Currency>(CURRENCIES[1]); // EUR
+  const [picker, setPicker] = useState<"from" | "to" | null>(null);
+
+  const { rate, loading, error } = useExchangeRate(from.code, to.code);
+
+  const numericAmount = parseFloat(amount) || 0;
+  const converted = rate
+    ? (numericAmount * rate).toLocaleString(undefined, {
+        maximumFractionDigits: 2,
+      })
+    : "—";
+
+  function handleSwap() {
+    setFrom(to);
+    setTo(from);
+  }
+
+  function handleSelect(currency: Currency) {
+    if (picker === "from") setFrom(currency);
+    else setTo(currency);
+  }
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+    <SafeAreaView style={styles.safe}>
+      <View style={styles.card}>
+        <Text style={styles.title}>Convert your currency</Text>
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
+        {/* Amount Input */}
+        <View style={styles.amountRow}>
+          <Text style={styles.symbol}>{from.symbol}</Text>
+          <TextInput
+            style={styles.amountInput}
+            value={amount}
+            onChangeText={setAmount}
+            keyboardType="numeric"
+            autoFocus
           />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
+        </View>
 
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+        {/* Currency Rows */}
+        <View style={styles.box}>
+          {/* From */}
+          <TouchableOpacity
+            style={styles.row}
+            onPress={() => setPicker("from")}
+          >
+            <Text style={styles.flag}>{from.flag}</Text>
+            <Text style={styles.code}>{from.code}</Text>
+            <Text style={styles.rowAmount}>
+              -{from.symbol}
+              {numericAmount.toLocaleString()}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Swap */}
+          <TouchableOpacity style={styles.swapBtn} onPress={handleSwap}>
+            <Text style={styles.swapIcon}>⇅</Text>
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          {/* To */}
+          <TouchableOpacity style={styles.row} onPress={() => setPicker("to")}>
+            <Text style={styles.flag}>{to.flag}</Text>
+            <Text style={styles.code}>{to.code}</Text>
+            {loading ? (
+              <ActivityIndicator size="small" color={Colors.blue} />
+            ) : (
+              <Text style={styles.rowAmount}>
+                +{to.symbol}
+                {converted}
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Fee & Error */}
+          {error ? (
+            <Text style={styles.error}>{error}</Text>
+          ) : (
+            <View style={styles.feeRow}>
+              <Text style={styles.muted}>Estimated fee</Text>
+              <Text style={styles.muted}>${FEE}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Convert Button */}
+        <TouchableOpacity style={styles.convertBtn}>
+          <Text style={styles.convertText}>Convert</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.secure}>
+          🔒 Highly secured and encrypted by Neo Bank
+        </Text>
+      </View>
+
+      {/* Currency Picker Modal */}
+      <CurrencyPicker
+        visible={picker !== null}
+        onSelect={handleSelect}
+        onClose={() => setPicker(null)}
+      />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safe: {
     flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
+    backgroundColor: Colors.background,
   },
-  safeArea: {
+  card: {
     flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+    margin: Spacing.md,
+    backgroundColor: Colors.card,
+    borderRadius: 24,
+    padding: Spacing.lg,
+    gap: Spacing.lg,
   },
   title: {
-    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: "600",
+    color: Colors.text,
   },
+
+  // Amount
+  amountRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  symbol: {
+    fontSize: 40,
+    fontWeight: "300",
+    color: Colors.text,
+  },
+  amountInput: {
+    fontSize: 52,
+    fontWeight: "300",
+    color: Colors.text,
+    borderBottomWidth: 2,
+    borderBottomColor: Colors.blue,
+    minWidth: 100,
+  },
+
+  // Currency Box
+  box: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 16,
+    padding: Spacing.md,
+    gap: Spacing.sm,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  flag: { fontSize: 24 },
   code: {
-    textTransform: 'uppercase',
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.text,
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  rowAmount: {
+    fontSize: 15,
+    color: Colors.textMuted,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.border,
+  },
+  swapBtn: {
+    alignSelf: "center",
+    backgroundColor: Colors.border,
+    borderRadius: 20,
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  swapIcon: {
+    fontSize: 18,
+    color: Colors.text,
+  },
+  feeRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingTop: 4,
+  },
+  muted: {
+    fontSize: 13,
+    color: Colors.textMuted,
+  },
+  error: {
+    fontSize: 13,
+    color: "red",
+    textAlign: "center",
+  },
+
+  // Bottom
+  convertBtn: {
+    backgroundColor: Colors.blue,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: "center",
+  },
+  convertText: {
+    color: "#fff",
+    fontSize: 17,
+    fontWeight: "600",
+  },
+  secure: {
+    textAlign: "center",
+    fontSize: 12,
+    color: Colors.textMuted,
   },
 });
